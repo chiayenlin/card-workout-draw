@@ -102,6 +102,20 @@
   }
   .timer.running { color: var(--accent); }
   .timer-note { color: var(--muted); font-size: .9rem; margin: 0 0 18px; min-height: 1.3em; }
+  .best-box {
+    border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  .best-box .label { font-weight: 600; }
+  .best-box .val { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .best-box .when { color: var(--muted); font-size: .85rem; width: 100%; }
+  .records td { font-variant-numeric: tabular-nums; }
+  .records td:first-child { color: var(--muted); }
+  .records td:nth-child(2) { color: var(--fg); }
+  .records tr.is-best td:nth-child(2) { color: var(--accent); font-weight: 700; }
+  .empty { color: var(--muted); font-size: .9rem; margin: 8px 0 0; }
+  .newbest { color: var(--accent); font-weight: 700; }
+  button.small { font-size: .85rem; padding: 6px 14px; margin-top: 10px; }
   button.stop { border-color: var(--red); color: var(--red); }
   @media (prefers-color-scheme: dark) { button.stop { border-color: #ff6b7d; color: #ff6b7d; } }
 
@@ -147,6 +161,17 @@
   <div class="count" id="count"></div>
 
   <div class="panels">
+    <div class="best-box">
+      <span class="label">最佳紀錄（完整 16 張）</span>
+      <span class="val" id="bestVal">—</span>
+      <span class="when" id="bestWhen">完成一整副 16 張並按「結束計時」後產生</span>
+    </div>
+    <details open>
+      <summary>最近 10 次紀錄</summary>
+      <table class="records" id="records"></table>
+      <p class="empty" id="recordsEmpty">還沒有紀錄</p>
+      <button class="small" id="clearBtn">清除所有紀錄</button>
+    </details>
     <details>
       <summary>規則</summary>
       <table>
@@ -236,6 +261,63 @@
     $("timerNote").textContent = `完成！共 ${drawn.length} 張，總時間 ${fmt(elapsed)}`;
     $("stopBtn").disabled = true;
     $("drawBtn").disabled = true;
+    saveRecord(elapsed, drawn.length);
+  }
+
+  // 紀錄：最近 10 次 + 歷史最佳（只算完整 16 張），存在這台裝置的瀏覽器
+  const KEY = "cardWorkout.v1";
+  function loadStore() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY));
+      if (d && Array.isArray(d.recent)) return d;
+    } catch (e) {}
+    return { recent: [], best: null };
+  }
+  function writeStore(d) {
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  let store = loadStore();
+
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  function saveRecord(ms, cards) {
+    const rec = { at: Date.now(), ms: Math.round(ms), cards };
+    store.recent.unshift(rec);
+    store.recent = store.recent.slice(0, 10);
+    let isNewBest = false;
+    if (cards === 16 && (!store.best || rec.ms < store.best.ms)) {
+      store.best = rec;
+      isNewBest = true;
+    }
+    writeStore(store);
+    renderRecords();
+    if (isNewBest) {
+      $("timerNote").innerHTML = `<span class="newbest">新紀錄！</span>共 16 張，總時間 ${fmt(rec.ms)}`;
+    }
+  }
+
+  function renderRecords() {
+    const b = store.best;
+    $("bestVal").textContent = b ? fmt(b.ms) : "—";
+    $("bestWhen").textContent = b ? `達成於 ${fmtDate(b.at)}` : "完成一整副 16 張並按「結束計時」後產生";
+    $("records").innerHTML = store.recent.map(r => {
+      const best = b && r.at === b.at ? " is-best" : "";
+      const tag = r.cards === 16 ? "" : `（${r.cards} 張）`;
+      return `<tr class="${best.trim()}"><td>${fmtDate(r.at)}</td><td>${fmt(r.ms)}${tag}</td></tr>`;
+    }).join("");
+    $("recordsEmpty").style.display = store.recent.length ? "none" : "";
+    $("clearBtn").style.display = store.recent.length || b ? "" : "none";
+  }
+
+  function clearRecords() {
+    if (!confirm("確定要清除所有紀錄（含最佳紀錄）？")) return;
+    store = { recent: [], best: null };
+    writeStore(store);
+    renderRecords();
   }
 
   function resetTimer() {
@@ -298,6 +380,8 @@
   $("drawBtn").addEventListener("click", draw);
   $("resetBtn").addEventListener("click", reset);
   $("stopBtn").addEventListener("click", stopTimer);
+  $("clearBtn").addEventListener("click", clearRecords);
+  renderRecords();
   document.addEventListener("keydown", e => {
     if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); draw(); }
   });
