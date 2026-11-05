@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>撲克牌運動抽籤</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --fg: #1f1d1a;
+    --muted: #6b665d;
+    --card: #ffffff;
+    --border: #d9d3c7;
+    --red: #c8102e;
+    --black: #1f1d1a;
+    --accent: #2f5d50;
+    --accent-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1917;
+      --fg: #ece8e0;
+      --muted: #a39d92;
+      --card: #fbfaf7;
+      --border: #3a3732;
+      --accent: #5fa68f;
+      --accent-fg: #10120f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: .95rem; }
+
+  .stage { perspective: 1000px; margin-bottom: 20px; }
+  .card {
+    width: 220px; height: 308px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform .5s ease;
+  }
+  .card.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0;
+    border-radius: 14px;
+    backface-visibility: hidden;
+    box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  .back {
+    background:
+      repeating-linear-gradient(45deg, #2f5d50 0 10px, #3b7363 10px 20px);
+    border: 8px solid #fff;
+  }
+  .front {
+    background: var(--card);
+    transform: rotateY(180deg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--black);
+  }
+  .front.red { color: var(--red); }
+  .corner {
+    position: absolute; font-weight: 700; line-height: 1; text-align: center;
+    font-size: 1.5rem;
+  }
+  .corner.tl { top: 12px; left: 14px; }
+  .corner.br { bottom: 12px; right: 14px; transform: rotate(180deg); }
+  .big-suit { font-size: 5rem; line-height: 1; }
+  .exercise { font-size: 1.15rem; font-weight: 700; margin-top: 12px; padding: 0 12px; text-align: center; }
+  .reps { font-size: 1rem; margin-top: 4px; color: #444; }
+
+  .result {
+    min-height: 3.2em; text-align: center; margin-bottom: 16px;
+    font-size: 1.25rem; font-weight: 600;
+  }
+  .result small { display: block; font-weight: 400; color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+  .buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font: inherit; font-size: 1.05rem;
+    padding: 12px 28px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+  }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
+  button:disabled { opacity: .45; cursor: default; }
+  .count { color: var(--muted); margin: 14px 0 22px; font-size: .95rem; }
+
+  .panels { width: 100%; max-width: 520px; display: grid; gap: 16px; }
+  details { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
+  summary { cursor: pointer; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .95rem; }
+  td { padding: 4px 0; }
+  td:last-child { text-align: right; color: var(--muted); }
+  ol { margin: 8px 0 0; padding-left: 1.4em; }
+  li { padding: 2px 0; }
+  .s-red { color: var(--red); }
+  @media (prefers-color-scheme: dark) { .s-red { color: #ff6b7d; } }
+</style>
+</head>
+<body>
+  <h1>撲克牌運動抽籤</h1>
+  <p class="sub">J／Q／K／A 決定動作，花色決定次數</p>
+
+  <div class="stage">
+    <div class="card" id="card">
+      <div class="face back"></div>
+      <div class="face front" id="front">
+        <div class="corner tl" id="cTL"></div>
+        <div class="big-suit" id="bigSuit"></div>
+        <div class="exercise" id="exName"></div>
+        <div class="reps" id="exReps"></div>
+        <div class="corner br" id="cBR"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="result" id="result">按下「抽一張」開始</div>
+
+  <div class="buttons">
+    <button class="primary" id="drawBtn">抽一張</button>
+    <button id="resetBtn">重新洗牌</button>
+  </div>
+  <div class="count" id="count"></div>
+
+  <div class="panels">
+    <details>
+      <summary>規則</summary>
+      <table>
+        <tr><td>J　Jacks</td><td>Jump Squats</td></tr>
+        <tr><td>Q　Queens</td><td>Mountain Climbers</td></tr>
+        <tr><td>K　Kings</td><td>High Knees</td></tr>
+        <tr><td>A　Aces</td><td>Heels to the Heavens</td></tr>
+        <tr><td>♠ Spades</td><td>10 Reps</td></tr>
+        <tr><td class="s-red">♦ Diamonds</td><td>12 Reps</td></tr>
+        <tr><td class="s-red">♥ Hearts</td><td>15 Reps</td></tr>
+        <tr><td>♣ Clubs</td><td>20 Reps</td></tr>
+      </table>
+    </details>
+    <details id="historyBox">
+      <summary>已抽過（<span id="histCount">0</span>）</summary>
+      <ol id="history"></ol>
+    </details>
+  </div>
+
+<script>
+  const RANKS = [
+    { r: "J", name: "Jump Squats" },
+    { r: "Q", name: "Mountain Climbers" },
+    { r: "K", name: "High Knees" },
+    { r: "A", name: "Heels to the Heavens" },
+  ];
+  const SUITS = [
+    { s: "♠", name: "Spades",   reps: 10, red: false },
+    { s: "♦", name: "Diamonds", reps: 12, red: true  },
+    { s: "♥", name: "Hearts",   reps: 15, red: true  },
+    { s: "♣", name: "Clubs",    reps: 20, red: false },
+  ];
+
+  let deck = [];
+  let drawn = [];
+
+  // Fisher–Yates 洗牌，用 crypto 亂數
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function newDeck() {
+    deck = [];
+    for (const rank of RANKS) for (const suit of SUITS) deck.push({ rank, suit });
+    shuffle(deck);
+    drawn = [];
+  }
+
+  const $ = id => document.getElementById(id);
+  const card = $("card");
+
+  function render() {
+    $("count").textContent = `剩 ${deck.length} / 16 張`;
+    $("drawBtn").disabled = deck.length === 0;
+    $("histCount").textContent = drawn.length;
+    $("history").innerHTML = drawn.map(c =>
+      `<li><span class="${c.suit.red ? "s-red" : ""}">${c.rank.r}${c.suit.s}</span>　${c.rank.name} × ${c.suit.reps}</li>`
+    ).join("");
+  }
+
+  function showCard(c) {
+    const front = $("front");
+    front.classList.toggle("red", c.suit.red);
+    $("cTL").innerHTML = `${c.rank.r}<br>${c.suit.s}`;
+    $("cBR").innerHTML = `${c.rank.r}<br>${c.suit.s}`;
+    $("bigSuit").textContent = c.suit.s;
+    $("exName").textContent = c.rank.name;
+    $("exReps").textContent = `${c.suit.reps} Reps`;
+    $("result").innerHTML = `${c.rank.name} × ${c.suit.reps}<small>${c.rank.r} of ${c.suit.name}</small>`;
+  }
+
+  function draw() {
+    if (!deck.length) return;
+    const c = deck.pop();
+    drawn.push(c);
+    $("drawBtn").disabled = true;
+    if (card.classList.contains("flipped")) {
+      card.classList.remove("flipped");
+      setTimeout(() => { showCard(c); card.classList.add("flipped"); render(); }, 500);
+    } else {
+      showCard(c);
+      card.classList.add("flipped");
+      render();
+    }
+    if (!deck.length) setTimeout(() => {
+      $("result").innerHTML += `<small>整副抽完了，按「重新洗牌」再來一輪</small>`;
+    }, 600);
+  }
+
+  function reset() {
+    newDeck();
+    card.classList.remove("flipped");
+    $("result").textContent = "已洗牌，按下「抽一張」開始";
+    render();
+  }
+
+  $("drawBtn").addEventListener("click", draw);
+  $("resetBtn").addEventListener("click", reset);
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); draw(); }
+  });
+
+  newDeck();
+  render();
+</script>
+</body>
+</html>
