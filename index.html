@@ -95,6 +95,16 @@
   button:disabled { opacity: .45; cursor: default; }
   .count { color: var(--muted); margin: 14px 0 22px; font-size: .95rem; }
 
+  .timer {
+    font-variant-numeric: tabular-nums;
+    font-size: 2.2rem; font-weight: 700; letter-spacing: .02em;
+    margin: 0 0 4px;
+  }
+  .timer.running { color: var(--accent); }
+  .timer-note { color: var(--muted); font-size: .9rem; margin: 0 0 18px; min-height: 1.3em; }
+  button.stop { border-color: var(--red); color: var(--red); }
+  @media (prefers-color-scheme: dark) { button.stop { border-color: #ff6b7d; color: #ff6b7d; } }
+
   .panels { width: 100%; max-width: 520px; display: grid; gap: 16px; }
   details { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
   summary { cursor: pointer; font-weight: 600; }
@@ -110,6 +120,9 @@
 <body>
   <h1>撲克牌運動抽籤</h1>
   <p class="sub">J／Q／K／A 決定動作，花色決定次數</p>
+
+  <div class="timer" id="timer">00:00.0</div>
+  <p class="timer-note" id="timerNote">抽第一張牌時開始計時</p>
 
   <div class="stage">
     <div class="card" id="card">
@@ -128,6 +141,7 @@
 
   <div class="buttons">
     <button class="primary" id="drawBtn">抽一張</button>
+    <button class="stop" id="stopBtn" disabled>結束計時</button>
     <button id="resetBtn">重新洗牌</button>
   </div>
   <div class="count" id="count"></div>
@@ -190,6 +204,50 @@
   const $ = id => document.getElementById(id);
   const card = $("card");
 
+  // 碼表：抽第一張開始，按「結束計時」停止
+  let startTime = null;   // performance.now() 起點
+  let elapsed = 0;        // 停止後的總毫秒
+  let tick = null;
+
+  function fmt(ms) {
+    const t = Math.floor(ms / 100);           // 0.1 秒為單位
+    const tenths = t % 10;
+    const s = Math.floor(t / 10) % 60;
+    const m = Math.floor(t / 600);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${tenths}`;
+  }
+
+  function startTimer() {
+    if (startTime !== null || elapsed) return;
+    startTime = performance.now();
+    $("timer").classList.add("running");
+    $("timerNote").textContent = "計時中，全部做完按「結束計時」";
+    $("stopBtn").disabled = false;
+    tick = setInterval(() => { $("timer").textContent = fmt(performance.now() - startTime); }, 100);
+  }
+
+  function stopTimer() {
+    if (startTime === null) return;
+    elapsed = performance.now() - startTime;
+    startTime = null;
+    clearInterval(tick);
+    $("timer").textContent = fmt(elapsed);
+    $("timer").classList.remove("running");
+    $("timerNote").textContent = `完成！共 ${drawn.length} 張，總時間 ${fmt(elapsed)}`;
+    $("stopBtn").disabled = true;
+    $("drawBtn").disabled = true;
+  }
+
+  function resetTimer() {
+    clearInterval(tick);
+    startTime = null;
+    elapsed = 0;
+    $("timer").textContent = fmt(0);
+    $("timer").classList.remove("running");
+    $("timerNote").textContent = "抽第一張牌時開始計時";
+    $("stopBtn").disabled = true;
+  }
+
   function render() {
     $("count").textContent = `剩 ${deck.length} / 16 張`;
     $("drawBtn").disabled = deck.length === 0;
@@ -211,7 +269,8 @@
   }
 
   function draw() {
-    if (!deck.length) return;
+    if (!deck.length || elapsed) return;
+    startTimer();
     const c = deck.pop();
     drawn.push(c);
     $("drawBtn").disabled = true;
@@ -224,12 +283,13 @@
       render();
     }
     if (!deck.length) setTimeout(() => {
-      $("result").innerHTML += `<small>整副抽完了，按「重新洗牌」再來一輪</small>`;
+      $("result").innerHTML += `<small>最後一張！做完按「結束計時」</small>`;
     }, 600);
   }
 
   function reset() {
     newDeck();
+    resetTimer();
     card.classList.remove("flipped");
     $("result").textContent = "已洗牌，按下「抽一張」開始";
     render();
@@ -237,6 +297,7 @@
 
   $("drawBtn").addEventListener("click", draw);
   $("resetBtn").addEventListener("click", reset);
+  $("stopBtn").addEventListener("click", stopTimer);
   document.addEventListener("keydown", e => {
     if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); draw(); }
   });
